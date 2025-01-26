@@ -1,0 +1,18 @@
+name: finnews
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - huggingface_hub
+  - ipywidgets
+  - jupyterlab
+  - langchain
+  - langchain-community
+  - pandas
+  - polars
+  - python=3.12
+  - sentence-transformers
+  - transformers
+  - pip:
+      - faiss-cpu
+      - langchain-huggingface
