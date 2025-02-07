@@ -11,6 +11,7 @@ dependencies:
   - pandas
   - polars
   - python=3.12
+  - pytorch-forecasting
   - seaborn
   - sentence-transformers
   - transformers

@@ -1,0 +1,23 @@
+[project]
+name = "fin-news"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "datasets>=3.2.0",
+    "faiss-cpu>=1.10.0",
+    "gluonts[torch]>=0.16.0",
+    "ipywidgets>=8.1.5",
+    "jupyterlab>=4.3.5",
+    "langchain>=0.3.17",
+    "langchain-community>=0.3.16",
+    "langchain-huggingface>=0.1.2",
+    "pandas>=2.2.3",
+    "polars>=1.21.0",
+    "pyarrow>=19.0.0",
+    "pytorch-forecasting>=1.3.0",
+    "seaborn>=0.13.2",
+    "sentence-transformers>=3.4.1",
+    "transformers>=4.48.3",
+]

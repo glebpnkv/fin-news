@@ -87,7 +87,8 @@ def train_fc_binary_classifier(
             f1 = f1_score(all_targets, (all_predictions >= 0.5).astype(int))
             roc_auc = roc_auc_score(all_targets, all_predictions)
 
-            print(f"Epoch [{epoch + 1}/{epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}, "
+            print(f"Epoch [{epoch + 1}/{epochs}], Train Loss: {avg_train_loss:.4f}, "
+                  f"Val Accuracy: {val_accuracy:.4f}, Val Loss: {avg_val_loss:.4f}, "
                   f"Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}, ROC AUC: {roc_auc:.4f}")
 
             # Save model if ROC AUC improves
