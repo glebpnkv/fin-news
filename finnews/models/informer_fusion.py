@@ -1,15 +1,24 @@
+"""Heavily inspired by https://huggingface.co/blog/informer"""
 import torch
 from transformers import InformerModel, InformerConfig
 from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask
-from transformers.modeling_outputs import BaseModelOutput, Seq2SeqTSModelOutput
+from transformers.modeling_outputs import (
+    BaseModelOutput,
+    SampleTSPredictionOutput,
+    Seq2SeqTSModelOutput,
+    Seq2SeqTSPredictionOutput
+)
 from transformers.models.informer.modeling_informer import (
     InformerEncoder, 
     InformerDecoder, 
     InformerFeatureEmbedder, 
     InformerNOPScaler, 
     InformerMeanScaler, 
-    InformerStdScaler
+    InformerStdScaler,
+    nll,
+    weighted_average
 )
+from transformers.time_series_utils import NormalOutput
 from torch import nn
 
 
@@ -135,25 +144,39 @@ class InformerFusionModel(InformerModel):
                 embedding_dims=config.embedding_dimension,
             )
 
-        # transformer encoder-decoder and mask initializer
+        # Transformer encoder-decoder and mask initializer
         self.encoder = InformerEncoderFusion(config)
         self.decoder = InformerDecoder(config)
 
-        # Initialize weights and apply final processing
+        self.distribution_output = NormalOutput(dim=config.input_size)
+        self.parameter_projection = self.distribution_output.get_parameter_projection(config.d_model)
+        self.target_shape = self.distribution_output.event_shape
+        self.loss = nll
+
+        # Initialize weights of distribution_output and apply final processing
         self.post_init()
 
-        # self.output = TODO
-        
+    def output_params(self, dec_output):
+        return self.parameter_projection(dec_output)
+
+    @torch.jit.ignore
+    def output_distribution(self, params, loc=None, scale=None, trailing_n=None) -> torch.distributions.Distribution:
+        sliced_params = params
+        if trailing_n is not None:
+            sliced_params = [p[:, -trailing_n:] for p in params]
+        return self.distribution_output.distribution(sliced_params, loc=loc, scale=scale)
+
     def forward(
         self,
         past_values: torch.Tensor,
         past_time_features: torch.Tensor,
-        past_observed_mask: torch.Tensor,
+        inputs_fusion: torch.FloatTensor | None = None,
+        past_observed_mask: torch.Tensor | None = None,
         static_categorical_features: torch.Tensor | None = None,
         static_real_features: torch.Tensor | None = None,
         future_values: torch.Tensor | None = None,
         future_time_features: torch.Tensor | None = None,
-        inputs_fusion: torch.FloatTensor | None = None,
+        future_observed_mask: torch.Tensor | None = None,
         decoder_attention_mask: torch.LongTensor | None = None,
         head_mask: torch.Tensor | None = None,
         decoder_head_mask: torch.Tensor | None = None,
@@ -184,6 +207,7 @@ class InformerFusionModel(InformerModel):
 
         if encoder_outputs is None:
             enc_input = transformer_inputs[:, : self.config.context_length, ...]
+            inputs_fusion = inputs_fusion[:, : self.config.context_length, ...]
             encoder_outputs = self.encoder(
                 inputs_embeds=enc_input,
                 inputs_fusion=inputs_fusion,
@@ -214,10 +238,7 @@ class InformerFusionModel(InformerModel):
             return_dict=return_dict,
         )
 
-        if not return_dict:
-            return decoder_outputs + encoder_outputs + (loc, scale, static_feat)
-
-        return Seq2SeqTSModelOutput(
+        outputs = Seq2SeqTSModelOutput(
             last_hidden_state=decoder_outputs.last_hidden_state,
             past_key_values=decoder_outputs.past_key_values,
             decoder_hidden_states=decoder_outputs.hidden_states,
@@ -229,4 +250,125 @@ class InformerFusionModel(InformerModel):
             loc=loc,
             scale=scale,
             static_features=static_feat,
+        )
+
+        prediction_loss = None
+        params = None
+        if future_values is not None:
+            params = self.output_params(outputs[0])  # outputs.last_hidden_state
+            # loc is 3rd last and scale is 2nd last output
+            distribution = self.output_distribution(params, loc=outputs[-3], scale=outputs[-2])
+
+            loss = self.loss(distribution, future_values)
+
+            if future_observed_mask is None:
+                future_observed_mask = torch.ones_like(future_values)
+
+            if len(self.target_shape) == 0:
+                loss_weights = future_observed_mask
+            else:
+                loss_weights, _ = future_observed_mask.min(dim=-1, keepdim=False)
+
+            prediction_loss = weighted_average(loss, weights=loss_weights)
+
+        if not return_dict:
+            outputs = ((params,) + outputs[1:]) if params is not None else outputs[1:]
+            return ((prediction_loss,) + outputs) if prediction_loss is not None else outputs
+
+        return Seq2SeqTSPredictionOutput(
+            loss=prediction_loss,
+            params=params,
+            past_key_values=outputs.past_key_values,
+            decoder_hidden_states=outputs.decoder_hidden_states,
+            decoder_attentions=outputs.decoder_attentions,
+            cross_attentions=outputs.cross_attentions,
+            encoder_last_hidden_state=outputs.encoder_last_hidden_state,
+            encoder_hidden_states=outputs.encoder_hidden_states,
+            encoder_attentions=outputs.encoder_attentions,
+            loc=outputs.loc,
+            scale=outputs.scale,
+            static_features=outputs.static_features,
+        )
+
+    @torch.no_grad()
+    def generate(
+        self,
+        past_values: torch.Tensor,
+        past_time_features: torch.Tensor,
+        future_time_features: torch.Tensor,
+        inputs_fusion: torch.FloatTensor | None = None,
+        past_observed_mask: torch.Tensor | None = None,
+        static_categorical_features: torch.Tensor | None = None,
+        static_real_features: torch.Tensor | None = None,
+        output_attentions: bool | None = None,
+        output_hidden_states: bool | None = None,
+    ) -> SampleTSPredictionOutput:
+
+        outputs = self(
+            past_values=past_values,
+            past_time_features=past_time_features,
+            inputs_fusion=inputs_fusion,
+            past_observed_mask=past_observed_mask,
+            static_categorical_features=static_categorical_features,
+            static_real_features=static_real_features,
+            future_values=None,
+            future_time_features=future_time_features,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=True,
+            use_cache=True,
+        )
+
+        enc_last_hidden = outputs.encoder_last_hidden_state
+        loc = outputs.loc
+        scale = outputs.scale
+        static_feat = outputs.static_features
+
+        num_parallel_samples = self.config.num_parallel_samples
+        repeated_loc = loc.repeat_interleave(repeats=num_parallel_samples, dim=0)
+        repeated_scale = scale.repeat_interleave(repeats=num_parallel_samples, dim=0)
+
+        repeated_past_values = (
+            past_values.repeat_interleave(repeats=num_parallel_samples, dim=0) - repeated_loc
+        ) / repeated_scale
+
+        expanded_static_feat = static_feat.unsqueeze(1).expand(-1, future_time_features.shape[1], -1)
+        features = torch.cat((expanded_static_feat, future_time_features), dim=-1)
+        repeated_features = features.repeat_interleave(repeats=num_parallel_samples, dim=0)
+
+        repeated_enc_last_hidden = enc_last_hidden.repeat_interleave(repeats=num_parallel_samples, dim=0)
+
+        future_samples = []
+
+        # greedy decoding
+        for k in range(self.config.prediction_length):
+            lagged_sequence = self.get_lagged_subsequences(
+                sequence=repeated_past_values,
+                subsequences_length=1 + k,
+                shift=1,
+            )
+
+            lags_shape = lagged_sequence.shape
+            reshaped_lagged_sequence = lagged_sequence.reshape(lags_shape[0], lags_shape[1], -1)
+
+            decoder_input = torch.cat((reshaped_lagged_sequence, repeated_features[:, : k + 1]), dim=-1)
+
+            dec_output = self.decoder(inputs_embeds=decoder_input, encoder_hidden_states=repeated_enc_last_hidden)
+            dec_last_hidden = dec_output.last_hidden_state
+
+            params = self.parameter_projection(dec_last_hidden[:, -1:])
+            distr = self.output_distribution(params, loc=repeated_loc, scale=repeated_scale)
+            next_sample = distr.sample()
+
+            repeated_past_values = torch.cat(
+                (repeated_past_values, (next_sample - repeated_loc) / repeated_scale), dim=1
+            )
+            future_samples.append(next_sample)
+
+        concat_future_samples = torch.cat(future_samples, dim=1)
+
+        return SampleTSPredictionOutput(
+            sequences=concat_future_samples.reshape(
+                (-1, num_parallel_samples, self.config.prediction_length) + self.target_shape,
+            )
         )
