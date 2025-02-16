@@ -20,7 +20,6 @@ from transformers import InformerConfig
 
 
 class RollingWindowSampler(InstanceSampler):
-
     def __call__(self, ts):
         # ts is the entire target array for a single time series
         # self.past_length and self.future_length come from the splitter
@@ -155,10 +154,6 @@ class InformerFusionDataset:
                 num_instances=num_instances,
                 min_future=self.model_config.prediction_length
             ),
-            # "validation": ValidationSplitSampler(
-            #     min_future=self.model_config.prediction_length
-            # ),
-            # "test": TestSplitSampler(),
             "validation": RollingWindowSampler(min_future=future_length),
             "test": RollingWindowSampler(min_future=future_length),
         }[mode]

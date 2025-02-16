@@ -256,10 +256,19 @@ class InformerFusionModel(InformerModel):
         params = None
         if future_values is not None:
             params = self.output_params(outputs[0])  # outputs.last_hidden_state
-            # loc is 3rd last and scale is 2nd last output
-            distribution = self.output_distribution(params, loc=outputs[-3], scale=outputs[-2])
 
-            loss = self.loss(distribution, future_values)
+            # loc is 3rd last and scale is 2nd last output; loc and scale are affine transformations - they are not
+            # distribution parameters
+            distribution = self.output_distribution(params, loc=outputs[-3], scale=outputs[-2])
+            loss_indiv = self.loss(distribution, future_values)
+
+            future_values_sum = torch.sum(future_values, dim=-1)
+            params_sum = (
+                torch.sum(params[0], dim=-1),
+                torch.sqrt(torch.sum(torch.pow(params[1], 2), dim=-1))
+            )
+            distribution_sum = self.output_distribution(params_sum, loc=None, scale=None)
+            loss_sum = torch.mean(self.loss(distribution_sum, future_values_sum))
 
             if future_observed_mask is None:
                 future_observed_mask = torch.ones_like(future_values)
@@ -269,7 +278,9 @@ class InformerFusionModel(InformerModel):
             else:
                 loss_weights, _ = future_observed_mask.min(dim=-1, keepdim=False)
 
-            prediction_loss = weighted_average(loss, weights=loss_weights)
+            loss_indiv = weighted_average(loss_indiv, weights=loss_weights)
+            # Adding a loss for the total
+            prediction_loss = 0.5 * loss_indiv + 0.5 * loss_sum
 
         if not return_dict:
             outputs = ((params,) + outputs[1:]) if params is not None else outputs[1:]
