@@ -192,17 +192,24 @@ class InformerFusionDataset:
         data = splitter.apply(data, is_train=train)
 
         # Batching
+        field_names = [
+            "past_time_features",
+            "past_values",
+            "past_articles",
+            "future_time_features",
+            "future_values",
+        ]
+        output_type = torch.tensor
+
+        if mode == "test":
+            field_names += [ "item_id", "forecast_start"]
+            output_type = None
+
         dataloader = as_stacked_batches(
             data,
             batch_size=batch_size,
-            field_names=[
-                "past_time_features",
-                "past_values",
-                "past_articles",
-                "future_time_features",
-                "future_values",
-            ],
-            output_type=torch.tensor,
+            field_names=field_names,
+            output_type=output_type,
         )
 
         return dataloader
