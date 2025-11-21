@@ -1,0 +1,12 @@
+[project]
+name = "fin-news-ravenpack-data-app"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    # Internal workspace lib
+    "fin-news-ravenpack-data"
+]
+
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"

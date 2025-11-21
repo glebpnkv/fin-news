@@ -1,0 +1,13 @@
+[project]
+name = "fin-news-ravenpack-data"
+version = "0.1.0"
+description = "Scripts for downloading news data from Bigdata Ravenpack"
+requires-python = ">=3.12"
+dependencies = [
+    "bigdata-client",
+    "pandas>=2.2.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"
