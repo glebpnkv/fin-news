@@ -7,7 +7,12 @@ authors = [
 description = "fin-news is using 🗞 to explain 📈"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "google-cloud-aiplatform>=1.128.0",
+    "google-cloud-bigquery>=3.30.0",
+    "google-cloud-secret-manager>=2.25.0",
+    "kfp>=2.13.0",
+]
 [dependency-groups]
 dev = [
     "ipywidgets>=8.1.5",

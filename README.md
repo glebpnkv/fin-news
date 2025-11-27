@@ -15,6 +15,20 @@ Once `uv` is installed, run `uv sync --all-packages` to install all dependencies
 uv sync --all-packages
 ```
 
+### GCP Setup
+
+To run the GCP pipelines in this repository on your GCP account, start by modifying the 
+`scripts/setup_gcloud.template.sh` script and running it: 
+
+* Set `PROJECT_ID` to your GCP project ID
+
+### Ravenpack pipelines
+Start by building the docker image for the `ravenpack_data` pipeline:
+
+```shell
+bash scripts/build_and_push/ravenpack_data.sh
+```
+
 ## Data
 ### BigData
 To run `ravenpack_data` pipeline, you will need [RavenPack BigData API key](https://bigdata.com/).

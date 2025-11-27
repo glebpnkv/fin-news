@@ -2,6 +2,8 @@ import concurrent.futures
 import logging
 import operator
 from concurrent.futures.thread import ThreadPoolExecutor
+from datetime import date, datetime
+from enum import Enum
 from functools import reduce
 from typing import Literal
 
@@ -18,6 +20,48 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+def json_serializer(obj):
+    """
+    Serializes an object into a JSON-compatible format.
+
+    This function converts various object types into formats suitable for
+    JSON serialization. Specifically, it supports `datetime.date` and
+    `datetime.datetime` instances by converting them to ISO 8601 strings,
+    `Enum` instances by using the value attribute, and Pydantic models (v1
+    and v2) by calling appropriate methods for dictionary representation.
+
+    Parameters
+    ----------
+    obj : Any
+        The object to be serialized. Accepted types include instances of
+        `datetime.date`, `datetime.datetime`, `Enum`, or Pydantic models
+        (v1 or v2).
+
+    Returns
+    -------
+    str or dict
+        A JSON-compatible representation of the object. For dates and
+        times, this is the ISO 8601 string. For enumerations, the value of
+        the enumeration. For Pydantic objects, a Python dictionary of the
+        model fields is returned.
+
+    Raises
+    ------
+    TypeError
+        If the provided object type is not supported or is not
+        serializable.
+    """
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, Enum):
+        return obj.value
+    if hasattr(obj, "dict"):  # Pydantic v1
+        return obj.dict()
+    if hasattr(obj, "model_dump"):  # Pydantic v2
+        return obj.model_dump()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 
 def validate_ravenpack_ids(
@@ -95,19 +139,6 @@ def validate_ravenpack_ids(
                 valid_ids[cur_id] = cur_result[0].dict()
             else:
                 invalid_ids.append(cur_id)
-
-    # Iterating over the entities
-    # for cur_id in ravenpack_ids:
-    #     try:
-    #         q = search_method(cur_id)
-    #         if len(q) > 0:
-    #             valid_ids[cur_id] = q[0].dict()
-    #         else:
-    #             logger.info(f"{label} '{cur_id}' cannot be found in RavenPack.")
-    #     except Exception as e:
-    #         logger.error(f"Error fetching {label.lower()} '{cur_id}': {e}")
-    #         invalid_ids.append(cur_id)
-    #         continue
 
     return valid_ids, invalid_ids
 

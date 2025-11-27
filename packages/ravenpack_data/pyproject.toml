@@ -6,6 +6,8 @@ requires-python = ">=3.12"
 dependencies = [
     "bigdata-client",
     "pandas>=2.2.3",
+    "polars>=1.21.0",
+    "pyarrow>=19.0.0",
 ]
 
 [build-system]
