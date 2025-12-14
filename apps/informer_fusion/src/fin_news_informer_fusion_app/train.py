@@ -8,7 +8,7 @@ from accelerate import Accelerator
 from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 from tqdm.auto import tqdm
 
-from fin_news_model_informer_fusion import FCBinaryClassifier, InformerFusionModel
+from fin_news_models.informer import FCBinaryClassifier, InformerFusionModel
 
 
 def train_fc_binary_classifier(

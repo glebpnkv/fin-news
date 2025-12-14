@@ -2,7 +2,7 @@
 name = "fin-news"
 version = "0.1.0"
 authors = [
-    {name = "Gleb Pankov", email = "careers@gpnkv.com"}
+    {name = "Gleb Pankov", email = "g@gpnkv.com"}
 ]
 description = "fin-news is using 🗞 to explain 📈"
 readme = "README.md"
@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "google-cloud-aiplatform>=1.128.0",
     "google-cloud-bigquery>=3.30.0",
+    "google-cloud-bigquery-storage>=2.35.0",
     "google-cloud-secret-manager>=2.25.0",
     "kfp>=2.13.0",
 ]
@@ -28,11 +29,11 @@ members = [
     "apps/informer_fusion",
     "apps/ravenpack_data",
 
-    "packages/model_informer_fusion",
+    "packages/models",
     "packages/ravenpack_data",
 ]
 
 # Mapping workspace members by *name* so others can depend on them
 [tool.uv.sources]
-fin-news-model-informer-fusion = { workspace = true }
+fin-news-models = { workspace = true }
 fin-news-ravenpack-data = { workspace = true }

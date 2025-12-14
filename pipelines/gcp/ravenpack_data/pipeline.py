@@ -101,7 +101,7 @@ def ravenpack_data_extract_pipeline(
     num_documents: int = 10,
     max_concurrency: int = 5,
     max_consecutive_failures: int = 5,
-    gcp_region: str = "europe-west4",
+    gcp_region: str = "us-central1",
 ):
     # 1. Download Ravenpack Data
     download_task = download_ravenpack_data(
